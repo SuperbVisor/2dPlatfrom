@@ -3,11 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platformer Shooter Games</title>
-    <link rel="stylesheet" href="static/styles.css">
+    <title>Platformer Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Hilangkan scroll agar fullscreen */
+        }
+        canvas {
+            display: block;
+            width: 100vw; /* Sesuaikan lebar dengan viewport */
+            height: 100vh; /* Sesuaikan tinggi dengan viewport */
+        }
+    </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    <script src="static/game.js"></script>
+    <script src="/static/game.js"></script>
 </body>
 </html>
