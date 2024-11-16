@@ -1,10 +1,83 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const playerImage = new Image();
+const enemyImage = new Image();
+const playerRunImage = new Image();
+const playerJumpImage = new Image();
+const playerFallImage = new Image();
+const hitImage = new Image();
+const enemyHitImage = new Image();
+const enemyDeadImage = new Image();
+const backgroundImage = new Image();
+const bulletImage = new Image();
 
-// Ukuran canvas
+const jumpSound = new Audio('static/sounds/jump.wav');
+const hurtSound = new Audio('static/sounds/hurt.wav'); 
+const shootSound = new Audio('static/sounds/shoot.wav');
+const enemyHitSound = new Audio('static/sounds/enehit.wav');
+const enemyDeathSound = new Audio('static/sounds/disaper.wav');
+const stepSound = new Audio('static/sounds/step1.wav');
+const groundSound = new Audio('static/sounds/grund.wav');
+
+const bgm = new Audio('static/sounds/bgm/timeofadven.mp3');
+
+backgroundImage.src = 'static/img/background/brown.png';
+enemyDeadImage.src = 'static/img/enemy img/dead.png';
+enemyHitImage.src = 'static/img/enemy img/hit.png';
+hitImage.src = 'static/img/player img/hit.png';
+playerFallImage.src = 'static/img/player img/fall.png';
+playerJumpImage.src = 'static/img/player img/jump.png';
+playerRunImage.src = 'static/img/player img/run.png';
+enemyImage.src = 'static/img/enemy img/Idle.png'; // Path ke gambar animasi musuh
+playerImage.src = 'static/img/player img/Idle.png'; // Ganti dengan path ke gambar animasi Anda
+bulletImage.src = 'static/img/bullets/stone1.png';
+
+
 canvas.width = 1200;
 canvas.height = 600;
 
+const enemyDeadAnimationSpeed = 20; // Kecepatan animasi saat mati
+let enemyDeadFrameCounter = 0; // Untuk menghitung frame animasi mati
+let enemyDeadCurrentFrame = 0; // Frame saat ini untuk animasi mati
+const enemyDeadTotalFrames = 4;
+
+
+let enemyIsHit = false;
+let enemyHitFrameCounter = 0;
+const enemyHitAnimationSpeed = 10; // Kecepatan animasi saat terkena hit
+let enemyHitCurrentFrame = 0; // Frame saat ini untuk animasi terkena hit
+const enemyHitTotalFrames = 5;
+
+let isHit = false;
+let hitFrameCounter = 0;
+const hitAnimationSpeed = 5; // Kecepatan animasi saat terkena hit
+let hitCurrentFrame = 0; // Frame saat ini untuk animasi terkena hit
+const hitTotalFrames = 7;
+
+let jumpPowerTap = -8; // Daya lompatan untuk tap spasi
+let jumpPowerHold = -12; // Daya lompatan untuk hold spasi
+
+const runTotalFrames = 12; // Misalnya ada 8 frame dalam animasi berlari
+let runCurrentFrame = 0; // Frame saat ini untuk animasi berlari
+let runAnimationSpeed = 5; // Kecepatan animasi berlari
+let runFrameCounter = 0; // Untuk menghitung frame animasi berlari
+
+let lastStepTime = 0;
+const stepCooldown = 340;
+
+let currentFrame = 0;
+const totalFrames = 11; // Misalnya ada 11 frame dalam animasi
+const frameWidth = 32; // Lebar setiap frame
+const frameHeight = 32; // Tinggi setiap frame
+let animationSpeed = 10; // Mengatur kecepatan animasi
+let frameCounter = 0; // Untuk menghitung frame
+
+const enemyTotalFrames = 10; // Misalnya ada 11 frame dalam animasi musuh
+let enemyCurrentFrame = 0; // Frame saat ini untuk musuh
+let enemyAnimationSpeed = 10; // Kecepatan animasi musuh
+let enemyFrameCounter = 0; // Untuk menghitung frame animasi musuh
+const enemyFrameWidth = 44; // Lebar setiap frame musuh
+const enemyFrameHeight = 30; // Tinggi setiap frame musuh
 
 // Player dan elemen game
 let player = { 
@@ -22,8 +95,9 @@ let player = {
     direction: 'right', 
     level: 1, 
     xp: 0, 
-    damage: 10,  // Damage peluru pemain
+    damage: 10,  
 };
+
 let bullets = [];
 let enemies = [];
 let keys = {};
@@ -40,7 +114,7 @@ let camera = { x: 0, y: 0, width: canvas.width, height: canvas.height };
 
 // Cooldown tembakan
 let lastShootTime = 0;
-const shootCooldown = 500; // Cooldown tembakan
+const shootCooldown = 1000; // Cooldown tembakan
 
 // Jarak musuh menyerang pemain
 const attackRange = 50;
@@ -48,28 +122,40 @@ const attackRange = 50;
 // Damage peluru pemain
 const bulletDamage = 15;
 
+// Damage musuh
+const enemyDamage = 5;
+
+const platforms = [
+    { x: 100, y: 400, width: 200, height: 20 }, // Platform pertama
+    { x: 500, y: 300, width: 150, height: 20 }, // Platform kedua
+    // ... tambahkan platform lainnya ...
+];
 
 document.addEventListener('keydown', (event) => {
     keys[event.key] = true;
 
-    if (event.key === ' ') {
-        if (!player.isJumping) {
-            player.isJumping = true;
-            player.jumpHold = true;
-            jumpHoldStartTime = Date.now();
-            player.dy = minJumpPower;
-        }
+    if (event.key === ' ' && !player.isJumping) {
+        player.isJumping = true;
+        player.jumpHold = true;
+        jumpHoldStartTime = Date.now();
+        player.dy = jumpPowerTap; // Gunakan daya lompatan untuk tap
+
+        // Mainkan suara lompat
+        jumpSound.play(); 
     }
 
     if (event.key === 'Enter') {
         const now = Date.now();
         if (now - lastShootTime > shootCooldown) {
-            if (player.direction === 'right') {
-                bullets.push({ x: player.x + player.width, y: player.y + player.height / 2, width: 10, height: 5, speed: 7 });
-            } else {
-                bullets.push({ x: player.x, y: player.y + player.height / 2, width: 10, height: 5, speed: -7 });
-            }
+            bullets.push({ 
+                x: player.x + (player.direction === 'right' ? player.width : 0), 
+                y: player.y + player.height / 2, 
+                width: 10, 
+                height: 5, 
+                speed: player.direction === 'right' ? 7 : -7 
+            });
             lastShootTime = now;
+            shootSound.play(); 
         }
     }
 });
@@ -78,222 +164,365 @@ document.addEventListener('keyup', (event) => {
     keys[event.key] = false;
 
     if (event.key === ' ') {
+        // Jika tombol spasi dilepas, gunakan daya lompatan untuk hold
+        if (player.jumpHold) {
+            player.dy = jumpPowerHold; // Gunakan daya lompatan untuk hold
+        }
         player.jumpHold = false;
     }
 });
 
+function startGame() {
+    bgm.loop = true; // Loop BGM
+    bgm.play();
+  }
+
 function spawnEnemy() {
     const enemy = {
-        x: camera.x + canvas.width + Math.random() * 300, // Spawn musuh di luar layar
+        x: camera.x + canvas.width + Math.random() * 300,
         y: 500,
-        width: 50,
-        height: 50,
+        width: enemyFrameWidth,
+        height: enemyFrameHeight,
         speed: 2,
-        health: 100 * player.level / 1,  // Health musuh berdasarkan level pemain
-        maxHealth: 100 * player.level / 1,  // Health max musuh
-        damage: 5 * player.level / 1,  // Damage musuh berdasarkan level
-        level: player.level
+        health: 50 * player.level,
+        maxHealth: 100 * player.level,
+        damage: 5 * player.level,
+        level: player.level,
+        lastAttackTime: 0,
+        attackCooldown: 1000,
+        currentFrame: 0,
+        direction: 'left',
+        isDead: false // Tambahkan properti ini
     };
     enemies.push(enemy);
+}
+
+// Fungsi untuk menggambar platform
+function drawPlatforms() {
+    platforms.forEach(platform => {
+      ctx.fillStyle = 'brown'; // Warna platform
+      ctx.fillRect(platform.x, platform.y, platform.width, platform.height); 
+    });
+  }
+  
+  // Fungsi untuk memeriksa tabrakan pemain dengan platform
+  function checkPlatformCollision() {
+    platforms.forEach(platform => {
+      // Periksa apakah pemain berada di atas platform
+      if (player.x + player.width > platform.x &&
+          player.x < platform.x + platform.width &&
+          player.y + player.height > platform.y &&
+          player.y + player.height < platform.y + platform.height) {
+        // Jika tabrakan, atur posisi pemain di atas platform
+        player.y = platform.y - player.height;
+        player.isJumping = false; // Hentikan lompatan
+        player.dy = 0; // Atur kecepatan vertikal menjadi 0
+        groundSound.play();
+      }
+    });
+  }
+
+function handlePlayerAttack(enemy) {
+    if (enemy.health > 0) {
+        enemy.health -= bulletDamage;
+        enemyIsHit = true; // Set status terkena hit
+        enemyHitCurrentFrame = 0; // Reset frame animasi hit
+        enemyHitSound.play(); 
+    }
+
+    // Jika kesehatan musuh <= 0, set status mati
+    if (enemy.health <= 0) {
+        enemy.isDead = true; // Set status mati untuk musuh ini
+        enemyDeadCurrentFrame = 0; // Reset frame animasi mati
+        enemyDeathSound.play(); 
+    }
+}
+
+function handleEnemyAttack(enemy) {
+    const now = Date.now();
+    if (now - enemy.lastAttackTime > enemy.attackCooldown) {
+        enemy.lastAttackTime = now;
+        player.health -= enemy.damage; // Musuh menyerang pemain
+        isHit = true; // Set status terkena hit
+        hitCurrentFrame = 0; // Reset frame animasi hit
+
+        // Mainkan suara terkena hit
+        hurtSound.play(); 
+    }
 }
 
 // Fungsi untuk mengejar pemain
 function chasePlayer(enemy) {
     const playerCenterX = player.x + player.width / 2;
-    const playerCenterY = player.y + player.height / 2;
     const enemyCenterX = enemy.x + enemy.width / 2;
 
-    if (Math.abs(playerCenterX - enemyCenterX) < attackRange) {
-        // Jika musuh dekat dengan pemain, musuh berhenti bergerak (menyerang)
-        enemy.dx = 0;
-        // Bisa ditambahkan logika menyerang di sini
+    if (playerCenterX < enemyCenterX) {
+        enemy.direction = 'right';
+        enemy.dx = -enemy.speed;
     } else {
-        // Musuh mengejar pemain
-        if (playerCenterX < enemyCenterX) {
-            enemy.dx = -enemy.speed; // Musuh bergerak ke kiri
+        enemy.direction = 'left';
+        enemy.dx = enemy.speed;
+    }
+
+    if (Math.abs(playerCenterX - enemyCenterX) < attackRange) {
+        if (player.y + player.height < enemy.y) {
+            return;
         } else {
-            enemy.dx = enemy.speed; // Musuh bergerak ke kanan
+            handleEnemyAttack(enemy); // Panggil fungsi untuk menangani serangan
         }
     }
 
-    // Update posisi musuh berdasarkan kecepatan dan arah
     enemy.x += enemy.dx;
 }
 
-// Update pemain dan musuh
+// Fungsi untuk memperbarui posisi dan status pemain
 function updatePlayer() {
     if (keys['d']) {
         player.dx = player.speed;
-        player.direction = 'right'; // Pemain menghadap kanan
+        player.direction = 'right';
     } else if (keys['a']) {
         player.dx = -player.speed;
-        player.direction = 'left'; // Pemain menghadap kiri
+        player.direction = 'left';
     } else {
         player.dx = 0;
     }
+    if (player.dx !== 0) {
+        const now = Date.now();
+        if (now - lastStepTime > stepCooldown) {
+            // Mainkan suara langkah kaki
+            stepSound.play(); 
+            lastStepTime = now; // Reset waktu terakhir langkah
+        }
+    }
 
     if (player.isJumping) {
-        if (player.jumpHold && Date.now() - jumpHoldStartTime <= maxJumpHoldTime) {
-            if (player.dy > maxJumpPower) {
-                player.dy -= 0.5;
-                
+        if (player.jumpHold) {
+            const holdTime = Date.now() - jumpHoldStartTime;
+            if (holdTime < maxJumpHoldTime) {
+                player.dy = Math.max(player.dy, jumpPowerHold); // Gunakan daya lompatan untuk hold
+            } else {
+                player.jumpHold = false; // Jika sudah lebih dari waktu hold, lepas
             }
         }
-
         player.dy += gravity;
         player.y += player.dy;
 
         if (player.y >= 500) {
-            player.isJumping = false;
-            player.jumpHold = false;
             player.y = 500;
+            player.isJumping = false;
             player.dy = 0;
+            groundSound.play();
         }
     }
 
     player.x += player.dx;
-
-    // Update posisi kamera agar mengikuti pemain
-    camera.x = player.x - canvas.width / 2 + player.width / 2;
-
-    // Pastikan kamera tidak keluar batas dunia
-    if (camera.x < 0) camera.x = 0;
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x)); // Membatasi gerakan pemain dalam batas kanvas
 }
 
-function isColliding(rect1, rect2) {
-    return (
-        rect1.x < rect2.x + rect2.width &&
-        rect1.x + rect1.width > rect2.x &&
-        rect1.y < rect2.y + rect2.height &&
-        rect1.y + rect1.height > rect2.y
-    );
-}
-
+// Fungsi untuk memperbarui peluru dan memeriksa tabrakan
 function updateBullets() {
     bullets.forEach((bullet, bulletIndex) => {
         bullet.x += bullet.speed;
-
-        if (bullet.x > camera.x + canvas.width || bullet.x < camera.x) {
+        if (bullet.x > canvas.width || bullet.x < 0) {
             bullets.splice(bulletIndex, 1);
-        }
-
-        enemies.forEach((enemy, enemyIndex) => {
-            if (isColliding(bullet, enemy)) {
-                enemy.health -= player.damage; // Kurangi kesehatan musuh berdasarkan damage peluru
-                bullets.splice(bulletIndex, 1);
-                if (enemy.health <= 0) {
-                    enemies.splice(enemyIndex, 1); // Musuh mati jika kesehatan habis
-                    player.xp += 10; // Pemain mendapatkan XP setelah membunuh musuh
-                    levelUp(); // Mengecek apakah pemain naik level
+        } else {
+            enemies.forEach((enemy, enemyIndex) => {
+                if (bullet.x < enemy.x + enemy.width && bullet.x + bullet.width > enemy.x &&
+                    bullet.y < enemy.y + enemy.height && bullet.y + bullet.height > enemy.y) {
+                    handlePlayerAttack(enemy);
+                    bullets.splice(bulletIndex, 1);
+                    if (enemy.health <= 0) {
+                        enemies.splice(enemyIndex, 1);
+                    }
                 }
-            }
-        });
+            });
+        }
     });
 }
 
-function updateEnemies() {
-    enemies.forEach((enemy) => {
-        chasePlayer(enemy); // Musuh mengejar pemain
-    });
+function drawWeaponIcon() {
+    const iconSize = 50; // Ukuran ikon senjata
+    const iconX = canvas.width - iconSize - 10; // Posisi X ikon
+    const iconY = 10; // Posisi Y ikon
+
+    ctx.drawImage(bulletImage, iconX, iconY, iconSize, iconSize); // Gambar ikon "bullet"
 }
 
 function drawPlayer() {
-    ctx.fillStyle = 'blue';
-    ctx.fillRect(player.x - camera.x, player.y - camera.y, player.width, player.height);
-}
+    ctx.save();
+    ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+    ctx.scale(player.direction === 'left' ? -1 : 1, 1);
 
-function drawBullets() {
-    ctx.fillStyle = 'red';
-    bullets.forEach(bullet => {
-        ctx.fillRect(bullet.x - camera.x, bullet.y - camera.y, bullet.width, bullet.height);
-    });
+    if (isHit) {
+        hitFrameCounter++;
+        if (hitFrameCounter >= hitAnimationSpeed) {
+            hitCurrentFrame = (hitCurrentFrame + 1) % hitTotalFrames; // Update frame animasi hit
+            hitFrameCounter = 0;
+            if (hitCurrentFrame === 0) {
+                isHit = false; // Kembali ke status normal setelah selesai animasi
+            }
+        }
+        ctx.drawImage(hitImage, hitCurrentFrame * frameWidth, 0, frameWidth, frameHeight, -player.width / 2, -player.height / 2, player.width, player.height); // Gambar animasi hit
+    } else {
+        // Gambar animasi normal
+        if (player.isJumping) {
+            ctx.drawImage(playerJumpImage, 0, 0, 32, 32, -player.width / 2, -player.height / 2, player.width, player.height);
+          } else if (player.dx !== 0) {
+            ctx.drawImage(playerRunImage, runCurrentFrame * 32, 0, 32, 32, -player.width / 2, -player.height / 2, player.width, player.height);
+          } else if (player.dy > 0) {
+            ctx.drawImage(playerFallImage, 0, 0, 32, 32, -player.width / 2, -player.height / 2, player.width, player.height);
+          } else {
+            ctx.drawImage(playerImage, currentFrame * frameWidth, 0, frameWidth, frameHeight, -player.width / 2, -player.height / 2, player.width, player.height);
+          }
+           // Gambar bullet di tangan pemain
+      }
+
+    ctx.restore();
 }
 
 function drawEnemies() {
-    ctx.fillStyle = 'green';
-    enemies.forEach(enemy => {
-        ctx.fillRect(enemy.x - camera.x, enemy.y - camera.y, enemy.width, enemy.height);
+    enemies.forEach((enemy, enemyIndex) => {
+        ctx.save(); // Simpan konteks
+        ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2); // Pindahkan titik referensi ke tengah musuh
+        ctx.scale(enemy.direction === 'left' ? -1 : 1, 1); // Membalik gambar musuh jika menghadap kiri
 
-        // Menampilkan health bar musuh dengan ukuran lebih proporsional
-        const healthBarWidth = 40;
-        const healthBarHeight = 5;
-        const healthBarX = enemy.x - camera.x + (enemy.width - healthBarWidth) / 2;
-        const healthBarY = enemy.y - camera.y - 10;
+        if (enemy.isDead) {
+            enemyDeadFrameCounter++;
+            if (enemyDeadFrameCounter >= enemyDeadAnimationSpeed) {
+                enemyDeadCurrentFrame = (enemyDeadCurrentFrame + 1) % enemyDeadTotalFrames; // Update frame animasi mati
+                enemyDeadFrameCounter = 0;
 
-        // Menggambar background health bar
-        ctx.fillStyle = 'black';
-        ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+                // Jika sudah mencapai frame terakhir, hapus musuh dari array
+                if (enemyDeadCurrentFrame === 0) {
+                    enemies.splice(enemyIndex, 1); // Menghapus musuh yang mati dari array
+                }
+            }
+            ctx.drawImage(enemyDeadImage, enemyDeadCurrentFrame * enemyFrameWidth, 0, enemyFrameWidth, enemyFrameHeight, -enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height); // Gambar animasi mati
+        } else if (enemyIsHit) {
+            enemyHitFrameCounter++;
+            if (enemyHitFrameCounter >= enemyHitAnimationSpeed) {
+                enemyHitCurrentFrame = (enemyHitCurrentFrame + 1) % enemyHitTotalFrames; // Update frame animasi hit
+                enemyHitFrameCounter = 0;
+                if (enemyHitCurrentFrame === 0) {
+                    enemyIsHit = false; // Kembali ke status normal setelah selesai animasi
+                }
+            }
+            ctx.drawImage(enemyHitImage, enemyHitCurrentFrame * enemyFrameWidth, 0, enemyFrameWidth, enemyFrameHeight, -enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height); // Gambar animasi hit
+        } else {
+            ctx.drawImage(enemyImage, enemy.currentFrame * enemyFrameWidth, 0, enemyFrameWidth, enemyFrameHeight, -enemy.width / 2, -enemy.height / 2, enemy.width, enemy.height); // Gambar animasi normal
+        }
 
-        // Menggambar health bar berdasarkan persentase health
-        ctx.fillStyle = 'red';
-        ctx.fillRect(healthBarX, healthBarY, healthBarWidth * (enemy.health / enemy.maxHealth), healthBarHeight);
-
-        // Menampilkan level musuh di atas health bar
-        ctx.fillStyle = 'white';
-        ctx.font = '16px "Press Start 2P"'; // Font pixel
-        ctx.fillText(`Lvl: ${enemy.level}`, healthBarX + (healthBarWidth - ctx.measureText(`Lvl: ${enemy.level}`).width) / 2, healthBarY - 5);
+        ctx.restore(); // Kembalikan konteks ke keadaan semula
     });
 }
 
-function drawPlayerUI() {
-    // Health Bar
-    ctx.fillStyle = 'red';
-    ctx.fillRect(10, 10, 200 * (player.health / player.maxHealth), 20); // Health bar
-
-    // XP Bar
-    ctx.fillStyle = 'cyan';
-    ctx.fillRect(10, 40, 200 * (player.xp / 100), 20); // XP bar
-
-    // Teks Level
-    ctx.fillStyle = 'white';
-    ctx.font = '16px "Press Start 2P"'; // Font pixel
-    ctx.fillText(`Lvl: ${player.level}`, 10, 70);
+// Fungsi untuk memperbarui posisi musuh
+function updateEnemies() {
+    enemies.forEach((enemy) => {
+        chasePlayer(enemy);
+        enemyFrameCounter++;
+        if (enemyFrameCounter >= enemyAnimationSpeed) {
+            enemy.currentFrame = (enemy.currentFrame + 1) % enemyTotalFrames; // Perbarui frame animasi musuh
+            enemyFrameCounter = 0;
+        }
+    });
 }
 
-// Fungsi untuk level up
-function levelUp() {
-    if (player.xp >= 100) {
-        player.level += 1;
-        player.xp = 0;
-        player.maxHealth += player.maxHealth * 0.05; // Tambah 5% HP
-        player.health = player.maxHealth;
-        player.damage += 5; // Tambah 5 damage peluru
+// Fungsi untuk menggambar semua elemen
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Menggambar background
+    for (let x = 0; x < canvas.width; x += 64) {
+        for (let y = 0; y < canvas.height; y += 64) {
+            ctx.drawImage(backgroundImage, x, y, 64, 64);
+        }
+    }
+
+    // Menggambar pemain
+    drawPlayer();
+
+    // Menggambar peluru
+    bullets.forEach((bullet) => {
+        ctx.drawImage(bulletImage, bullet.x, bullet.y, 20, 20); // Gambar peluru dengan gambar
+    });
+
+    // Menggambar musuh
+    drawEnemies(); // Gambar semua musuh
+    drawWeaponIcon();
+
+    // Menggambar health bar pemain
+    const healthBarWidth = 200; // Lebar health bar
+    const healthBarHeight = 20; // Tinggi health bar
+    const healthBarX = 10; // Posisi X health bar
+    const healthBarY = 40; // Posisi Y health bar
+    const radius = 10; // Radius sudut
+
+    // Gambar background health bar
+    ctx.fillStyle = 'black';
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 5;
+    ctx.stroke(); 
+    roundRect(ctx, healthBarX, healthBarY, healthBarWidth, healthBarHeight, radius);
+
+    // Gambar health bar yang terisi
+    const healthPercentage = player.health / player.maxHealth; // Hitung persentase kesehatan
+    ctx.fillStyle = 'green';
+    roundRect(ctx, healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight, radius); // Gambar health bar yang terisi
+
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+}
+
+// Fungsi untuk memperbarui animasi
+function updateAnimation() {
+    frameCounter++;
+    if (frameCounter >= animationSpeed) {
+        currentFrame = (currentFrame + 1) % totalFrames;
+        frameCounter = 0;
+    }
+
+    // Update animasi berlari
+    if (player.dx !== 0) {
+        runFrameCounter++;
+        if (runFrameCounter >= runAnimationSpeed) {
+            runCurrentFrame = (runCurrentFrame + 1) % runTotalFrames; // Perbarui frame animasi berlari
+            runFrameCounter = 0;
+        }
     }
 }
 
-function drawBackground() {
-    // Membuat gradasi dari atas ke bawah
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#87CEEB'); // Warna terang di atas (biru muda)
-    gradient.addColorStop(1, '#0b2a2c'); // Warna gelap di bawah (hijau gelap)
-
-    // Menggambar background menggunakan gradasi
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-// Respawn dan game loop
+// Fungsi utama untuk menjalankan game loop
 function gameLoop(timestamp) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Gambar background gradasi terlebih dahulu
-    drawBackground();
-
     if (timestamp - lastSpawn > spawnInterval) {
         spawnEnemy();
         lastSpawn = timestamp;
     }
-
+    
+    startGame();
+    updateAnimation(); // Memperbarui animasi
     updatePlayer();
-    updateBullets();
     updateEnemies();
-
-    drawPlayer();
-    drawBullets();
-    drawEnemies();
-    drawPlayerUI(); // Gambar UI (Health bar, XP bar)
+    updateBullets();
+    draw();
+    drawPlatforms();
+    checkPlatformCollision();
 
     requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
+// Memulai game loop
+requestAnimationFrame(gameLoop);
